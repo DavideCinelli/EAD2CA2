@@ -1,0 +1,38 @@
+﻿# Ignore the following files for ASP.NET Core projects
+
+# ASP.NET Core build files
+bin/
+obj/
+
+# User secrets (for local development)
+secrets.json
+
+# Azure Web App deployment files
+publish/
+
+# Logs
+*.log
+
+# Windows Installer files
+*.vsix
+
+# .NET Core temporary files
+project.lock.json
+project.fragment.lock.json
+
+# ASP.NET Core environment files
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Staging.json
+
+# JetBrains Rider configuration files
+.idea/
+
+# Local settings for Visual Studio
+.vsconfig
+
+# Windows image file caches
+Thumbs.db
+
+# Linux file system files
+*.swp
