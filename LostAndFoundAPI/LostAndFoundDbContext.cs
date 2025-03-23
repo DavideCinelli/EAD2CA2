@@ -125,6 +125,7 @@ namespace LostAndFoundAPI
         public DateTime LastModified { get; set; } = DateTime.UtcNow;
     }
 
+    [Index(nameof(Email), IsUnique = true)]
     public class User
     {
         [Key]
@@ -141,7 +142,6 @@ namespace LostAndFoundAPI
         [Required]
         [EmailAddress]
         [StringLength(100)]
-        [Index(IsUnique = true)]
         public string Email { get; set; }
 
         [Phone]

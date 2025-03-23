@@ -8,7 +8,14 @@ builder.Services.AddControllers();
 
 // Configure the DbContext to use SQL Server with the connection string from appsettings.json
 builder.Services.AddDbContext<LostAndFoundDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlServerOptionsAction: sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null);
+        }));
 
 // Add Swagger/OpenAPI for documentation
 builder.Services.AddEndpointsApiExplorer();
