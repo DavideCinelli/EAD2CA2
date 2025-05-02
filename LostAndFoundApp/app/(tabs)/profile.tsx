@@ -7,12 +7,19 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import { Ionicons } from '@expo/vector-icons';
+import { useThemeColor } from '@/hooks/useThemeColor';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const [userItems, setUserItems] = useState<ItemResponseDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const { t, i18n } = useTranslation();
+  const iconColor = useThemeColor({}, 'text');
 
   useEffect(() => {
     fetchUserItems();
@@ -23,10 +30,10 @@ export default function ProfileScreen() {
       setIsLoading(true);
       const allItems = await itemsApi.getAll();
       // Filter items that belong to the current user
-      const items = allItems.filter(item => user && item.userId === parseInt(user.id));
+      const items = allItems.filter(item => user && item.userId === Number(user.id));
       setUserItems(items);
     } catch (err) {
-      setError('Failed to load your items');
+      setError(t('errors.loadFailed'));
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -35,20 +42,19 @@ export default function ProfileScreen() {
 
   const handleDeleteItem = async (itemId: number) => {
     Alert.alert(
-      'Delete Item',
-      'Are you sure you want to delete this item?',
+      t('common.delete'),
+      t('common.confirmDelete'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Delete', 
+          text: t('common.delete'), 
           style: 'destructive',
           onPress: async () => {
             try {
               await itemsApi.delete(itemId);
-              // Remove the deleted item from the list
               setUserItems(userItems.filter(item => item.id !== itemId));
             } catch (err) {
-              Alert.alert('Error', 'Failed to delete item');
+              Alert.alert(t('errors.deleteFailed'));
             }
           }
         }
@@ -58,12 +64,12 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
+      t('common.logout'),
+      t('common.confirmLogout'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Logout', 
+          text: t('common.logout'), 
           onPress: async () => {
             await logout();
             router.replace('/auth/login');
@@ -71,6 +77,15 @@ export default function ProfileScreen() {
         }
       ]
     );
+  };
+
+  const languages = [
+    { code: 'en', name: 'English' },
+    { code: 'es', name: 'Español' }
+  ];
+
+  const changeLanguage = async (langCode: string) => {
+    await i18n.changeLanguage(langCode);
   };
 
   // Render each item in the list
@@ -90,9 +105,11 @@ export default function ProfileScreen() {
       
       <View style={styles.itemDetails}>
         <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemCategory}>{item.category}</Text>
+        <Text style={styles.itemCategory}>
+          {t(`items.categories.${item.category.toLowerCase()}`, { defaultValue: item.category })}
+        </Text>
         <Text style={styles.itemStatus} numberOfLines={1}>
-          {item.isLost ? '🔴 Lost' : '🟢 Found'} • {item.location}
+          {item.isLost ? `🔴 ${t('items.lost')}` : `🟢 ${t('items.found')}`} • {item.location}
         </Text>
         <Text style={styles.itemDate}>
           {new Date(item.date).toLocaleDateString()}
@@ -104,25 +121,25 @@ export default function ProfileScreen() {
           style={styles.editButton}
           onPress={() => router.push(`/items/${item.id}`)}
         >
-          <Text style={styles.editButtonText}>Edit</Text>
+          <Text style={styles.editButtonText}>{t('common.edit')}</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.deleteButton}
           onPress={() => handleDeleteItem(item.id)}
         >
-          <Text style={styles.deleteButtonText}>Delete</Text>
+          <Text style={styles.deleteButtonText}>{t('common.delete')}</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <ThemedView style={styles.container}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
+        <Text style={styles.title}>{t('common.profile')}</Text>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Logout</Text>
+          <Text style={styles.logoutText}>{t('common.logout')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -135,7 +152,7 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.itemsContainer}>
-        <Text style={styles.sectionTitle}>Your Items</Text>
+        <Text style={styles.sectionTitle}>{t('common.yourItems')}</Text>
         
         {isLoading ? (
           <ActivityIndicator size="large" color="#4a90e2" />
@@ -143,14 +160,14 @@ export default function ProfileScreen() {
           <Text style={styles.errorText}>{error}</Text>
         ) : userItems.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>You haven't posted any items yet</Text>
+            <Text style={styles.emptyText}>{t('common.noItemsYet')}</Text>
             <TouchableOpacity 
               style={styles.addItemButton}
               onPress={() => router.push('/add-item')}
             >
               <View style={styles.addItemButtonContent}>
                 <FontAwesome name="plus-circle" size={20} color="#fff" />
-                <Text style={styles.addItemButtonText}>Add an Item</Text>
+                <Text style={styles.addItemButtonText}>{t('common.addItem')}</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -164,7 +181,30 @@ export default function ProfileScreen() {
           />
         )}
       </View>
-    </View>
+
+      <View style={styles.section}>
+        <ThemedText style={styles.sectionTitle}>{t('common.language')}</ThemedText>
+        
+        {/* Language Selection */}
+        <View style={styles.languageSection}>
+          {languages.map((lang) => (
+            <TouchableOpacity
+              key={lang.code}
+              style={[
+                styles.languageButton,
+                i18n.language === lang.code && styles.selectedLanguage
+              ]}
+              onPress={() => changeLanguage(lang.code)}
+            >
+              <ThemedText style={styles.languageText}>{lang.name}</ThemedText>
+              {i18n.language === lang.code && (
+                <Ionicons name="checkmark" size={24} color={iconColor} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </ThemedView>
   );
 }
 
@@ -352,5 +392,39 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  section: {
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  languageSection: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  languageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginVertical: 4,
+    backgroundColor: '#f5f5f5',
+  },
+  selectedLanguage: {
+    backgroundColor: '#e8f0fe',
+    borderWidth: 1,
+    borderColor: '#4a90e2',
+  },
+  languageText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333333',
   },
 }); 

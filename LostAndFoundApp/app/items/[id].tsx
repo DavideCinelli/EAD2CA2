@@ -7,8 +7,11 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ItemDetailScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [item, setItem] = useState<ItemResponseDTO | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,6 +28,8 @@ export default function ItemDetailScreen() {
   const [isLost, setIsLost] = useState(true);
   const [isSolved, setIsSolved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [date, setDate] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -35,8 +40,7 @@ export default function ItemDetailScreen() {
   const fetchItem = async (itemId: string) => {
     try {
       setIsLoading(true);
-      const numericId = parseInt(itemId, 10);
-      const fetchedItem = await itemsApi.getById(numericId);
+      const fetchedItem = await itemsApi.getById(parseInt(itemId));
       setItem(fetchedItem);
       
       // Initialize form fields
@@ -47,8 +51,9 @@ export default function ItemDetailScreen() {
       setImageUrl(fetchedItem.imageUrl || '');
       setIsLost(fetchedItem.isLost);
       setIsSolved(fetchedItem.isSolved);
+      setDate(fetchedItem.date);
     } catch (err) {
-      setError('Failed to load item details');
+      setError(t('errors.loadFailed'));
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -60,7 +65,7 @@ export default function ItemDetailScreen() {
 
     // Validate input
     if (!name || !description || !category || !location) {
-      Alert.alert('Error', 'Name, description, category, and location are required');
+      Alert.alert(t('common.error'), t('errors.requiredFields'));
       return;
     }
 
@@ -80,9 +85,9 @@ export default function ItemDetailScreen() {
       const response = await itemsApi.update(parseInt(id), updatedItem);
       setItem(response);
       setIsEditing(false);
-      Alert.alert('Success', 'Item updated successfully');
+      Alert.alert(t('common.success'), t('items.saveSuccess'));
     } catch (err) {
-      Alert.alert('Error', 'Failed to update item');
+      Alert.alert(t('common.error'), t('errors.saveFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -92,22 +97,22 @@ export default function ItemDetailScreen() {
     if (!id) return;
 
     Alert.alert(
-      'Delete Item',
-      'Are you sure you want to delete this item?',
+      t('common.delete'),
+      t('common.confirmDelete'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Delete', 
+          text: t('common.delete'), 
           style: 'destructive',
           onPress: async () => {
             try {
               setIsLoading(true);
               await itemsApi.delete(parseInt(id));
-              Alert.alert('Success', 'Item deleted successfully', [
-                { text: 'OK', onPress: () => router.replace('/') }
+              Alert.alert(t('common.success'), t('items.deleteSuccess'), [
+                { text: t('common.ok'), onPress: () => router.replace('/') }
               ]);
             } catch (err) {
-              Alert.alert('Error', 'Failed to delete item');
+              Alert.alert(t('common.error'), t('errors.deleteFailed'));
               setIsLoading(false);
             }
           }
@@ -117,61 +122,118 @@ export default function ItemDetailScreen() {
   };
 
   const handleMarkAsSolved = async () => {
-    console.log('handleMarkAsSolved called');
-    if (!id || !item) {
-      console.log('Missing id or item:', { id, item });
+    if (!id || !item) return;
+
+    try {
+      setIsSaving(true);
+      console.log('Marking item as solved:', id);
+      
+      // Use the regular update endpoint with just the isSolved field
+      const updateData: ItemUpdateDTO = {
+        isSolved: true
+      };
+
+      console.log('Sending update request:', updateData);
+      
+      // Make the API call using the regular update endpoint
+      const updatedItem = await itemsApi.update(parseInt(id), updateData);
+      console.log('Item marked as solved successfully:', updatedItem);
+      
+      // Update local state
+      setItem(updatedItem);
+      setIsSolved(updatedItem.isSolved);
+
+      // Show success message and navigate
+      Alert.alert(
+        t('common.success'),
+        t('items.markedAsSolved'),
+        [
+          {
+            text: t('common.ok'),
+            onPress: () => {
+              router.replace('/(tabs)');
+              router.push({
+                pathname: '/explore',
+                params: { 
+                  filter: 'solved',
+                  refresh: Date.now().toString()
+                }
+              });
+            }
+          }
+        ]
+      );
+    } catch (err) {
+      console.error('Error marking item as solved:', err);
+      Alert.alert(
+        t('common.error'),
+        t('errors.markAsSolvedFailed'),
+        [{ text: t('common.ok') }]
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!item) {
+      setError(t('errors.itemNotFound'));
       return;
     }
 
-    console.log('Showing alert dialog');
-    Alert.alert(
-      'Mark as Solved',
-      'Are you sure you want to mark this item as solved?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Mark as Solved', 
-          onPress: async () => {
-            console.log('Alert confirmed, starting update');
-            try {
-              setIsSaving(true);
-              const updatedItem: ItemUpdateDTO = {
-                name: item.name,
-                description: item.description,
-                category: item.category,
-                location: item.location,
-                isLost: item.isLost,
-                isSolved: true,
-                imageUrl: item.imageUrl
-              };
-              
-              const numericId = parseInt(id, 10);
-              console.log('Marking item as solved:', numericId);
-              const response = await itemsApi.update(numericId, updatedItem);
-              console.log('Server response:', response);
-              
-              if (response) {
-                // Update local state with the response from the server
-                setItem(response);
-                setIsSolved(response.isSolved);
-                Alert.alert('Success', 'Item marked as solved');
-              } else {
-                throw new Error('No response received from server');
-              }
-            } catch (err) {
-              console.error('Error marking item as solved:', err);
-              Alert.alert('Error', 'Failed to mark item as solved');
-            } finally {
-              setIsSaving(false);
-            }
-          }
-        }
-      ]
-    );
+    try {
+      setIsUpdating(true);
+      setError('');
+
+      const updateData: ItemUpdateDTO = {
+        name: name.trim(),
+        description: description.trim(),
+        category: category.trim(),
+        location: location.trim(),
+        date: date,
+        isLost: isLost,
+        isSolved: isSolved,
+        imageUrl: imageUrl?.trim() || undefined
+      };
+
+      console.log('Updating item with data:', updateData);
+      
+      // Update the item
+      const updatedItem = await itemsApi.update(item.id, updateData);
+      
+      // Verify the update was successful
+      if (updatedItem.isSolved !== updateData.isSolved) {
+        throw new Error('Failed to update item status');
+      }
+      
+      // Update local state
+      setItem(updatedItem);
+      
+      // Show success message
+      Alert.alert(
+        t('common.success'),
+        t('items.updateSuccess'),
+        [{ text: t('common.ok') }]
+      );
+
+      // Navigate back
+      router.back();
+    } catch (err) {
+      console.error('Error updating item:', err);
+      setError(t('errors.updateFailed'));
+      
+      // Reset status if update failed
+      if (item) {
+        setIsSolved(item.isSolved);
+        setIsLost(item.isLost);
+      }
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   // Check if current user is the owner of the item
-  const isOwner = item && user && item.userId === parseInt(user.id);
+  const isOwner = item && user && item.userId === Number(user.id);
 
   if (isLoading) {
     return (
@@ -207,7 +269,7 @@ export default function ItemDetailScreen() {
         </TouchableOpacity>
         
         <Text style={styles.title}>
-          {isEditing ? 'Edit Item' : 'Item Details'}
+          {isEditing ? t('items.editItem') : t('items.itemDetails')}
         </Text>
         
         {isOwner && !isEditing && (
@@ -272,12 +334,15 @@ export default function ItemDetailScreen() {
                   ? '#d32f2f' 
                   : '#2e7d32' }
             ]}>
-              {item.isSolved ? 'Solved' : item.isLost ? 'Lost' : 'Found'}
+              {(() => {
+                const statusKey = item.isSolved ? 'items.solved' : item.isLost ? 'items.lost' : 'items.found';
+                return t(statusKey);
+              })()}
             </Text>
           </View>
 
-          {/* Mark as Solved Button - Available to all users */}
-          {!item.isSolved && user && (
+          {/* Mark as Solved Button - Only show if not already solved */}
+          {!item.isSolved && (
             <TouchableOpacity 
               style={styles.solveButton}
               onPress={() => {
@@ -289,9 +354,13 @@ export default function ItemDetailScreen() {
               disabled={isSaving}
             >
               <FontAwesome name="check-circle" size={16} color="#fff" />
-              <Text style={styles.solveButtonText}>
-                {isSaving ? 'Marking as Solved...' : 'Mark as Solved'}
-              </Text>
+              {isSaving ? (
+                <ActivityIndicator color="#fff" style={{ marginLeft: 8 }} />
+              ) : (
+                <Text style={styles.solveButtonText}>
+                  {t('items.markAsSolved')}
+                </Text>
+              )}
             </TouchableOpacity>
           )}
         </View>
@@ -300,22 +369,22 @@ export default function ItemDetailScreen() {
           // Edit Form
           <View style={styles.formContainer}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Name</Text>
+              <Text style={styles.label}>{t('items.itemName')}</Text>
               <TextInput
                 style={styles.input}
                 value={name}
                 onChangeText={setName}
-                placeholder="What is the item?"
+                placeholder={t('items.whatIsItem')}
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Description</Text>
+              <Text style={styles.label}>{t('items.description')}</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Describe the item (color, size, distinctive features)"
+                placeholder={t('items.describeItem')}
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
@@ -323,40 +392,40 @@ export default function ItemDetailScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Category</Text>
+              <Text style={styles.label}>{t('items.category')}</Text>
               <TextInput
                 style={styles.input}
                 value={category}
                 onChangeText={setCategory}
-                placeholder="What category does it belong to?"
+                placeholder={t('items.selectCategory')}
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Location</Text>
+              <Text style={styles.label}>{t('items.location')}</Text>
               <TextInput
                 style={styles.input}
                 value={location}
                 onChangeText={setLocation}
-                placeholder="Where was it lost/found?"
+                placeholder={t('items.whereItem')}
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Image URL (Optional)</Text>
+              <Text style={styles.label}>{t('items.imageUrl')}</Text>
               <TextInput
                 style={styles.input}
                 value={imageUrl}
                 onChangeText={setImageUrl}
-                placeholder="https://example.com/image.jpg"
+                placeholder={t('items.imageUrlHint')}
                 autoCapitalize="none"
               />
             </View>
 
             <View style={styles.switchContainer}>
-              <Text style={styles.label}>Item Status:</Text>
+              <Text style={styles.label}>{t('items.itemStatus')}:</Text>
               <View style={styles.statusToggle}>
-                <Text style={{ color: isLost ? '#4a90e2' : '#666' }}>Lost</Text>
+                <Text style={{ color: isLost ? '#4a90e2' : '#666' }}>{t('items.lost')}</Text>
                 <Switch
                   value={!isLost}
                   onValueChange={(value) => setIsLost(!value)}
@@ -364,14 +433,14 @@ export default function ItemDetailScreen() {
                   thumbColor="#fff"
                   ios_backgroundColor="#4a90e2"
                 />
-                <Text style={{ color: !isLost ? '#5cb85c' : '#666' }}>Found</Text>
+                <Text style={{ color: !isLost ? '#5cb85c' : '#666' }}>{t('items.found')}</Text>
               </View>
             </View>
 
             <View style={styles.switchContainer}>
-              <Text style={styles.label}>Solved:</Text>
+              <Text style={styles.label}>{t('items.solved')}:</Text>
               <View style={styles.statusToggle}>
-                <Text style={{ color: !isSolved ? '#666' : '#1976d2' }}>No</Text>
+                <Text style={{ color: !isSolved ? '#666' : '#1976d2' }}>{t('common.no')}</Text>
                 <Switch
                   value={isSolved}
                   onValueChange={(value) => setIsSolved(value)}
@@ -379,7 +448,7 @@ export default function ItemDetailScreen() {
                   thumbColor="#fff"
                   ios_backgroundColor="#e0e0e0"
                 />
-                <Text style={{ color: isSolved ? '#1976d2' : '#666' }}>Yes</Text>
+                <Text style={{ color: isSolved ? '#1976d2' : '#666' }}>{t('common.yes')}</Text>
               </View>
             </View>
 
@@ -389,17 +458,17 @@ export default function ItemDetailScreen() {
                 onPress={() => setIsEditing(false)}
                 disabled={isSaving}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.button, styles.saveButton]} 
-                onPress={handleSave}
+                onPress={handleUpdate}
                 disabled={isSaving}
               >
                 {isSaving ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                  <Text style={styles.saveButtonText}>{t('common.save')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -411,24 +480,24 @@ export default function ItemDetailScreen() {
             <Text style={styles.itemCategory}>{item.category}</Text>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Description</Text>
+              <Text style={styles.sectionTitle}>{t('items.description')}</Text>
               <Text style={styles.sectionContent}>{item.description}</Text>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Location</Text>
+              <Text style={styles.sectionTitle}>{t('items.location')}</Text>
               <Text style={styles.sectionContent}>{item.location}</Text>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Date</Text>
+              <Text style={styles.sectionTitle}>{t('items.date')}</Text>
               <Text style={styles.sectionContent}>
                 {new Date(item.date).toLocaleDateString()}
               </Text>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Posted By</Text>
+              <Text style={styles.sectionTitle}>{t('items.postedBy')}</Text>
               <Text style={styles.sectionContent}>{item.username}</Text>
             </View>
 
@@ -438,7 +507,7 @@ export default function ItemDetailScreen() {
                   style={[styles.button, styles.deleteButton]} 
                   onPress={handleDelete}
                 >
-                  <Text style={styles.deleteButtonText}>Delete Item</Text>
+                  <Text style={styles.deleteButtonText}>{t('common.delete')}</Text>
                 </TouchableOpacity>
               </View>
             )}

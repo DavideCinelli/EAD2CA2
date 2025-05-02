@@ -5,20 +5,22 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 const CATEGORIES = [
-  'Electronics',
-  'Clothing',
-  'Jewelry',
-  'Documents',
-  'Keys',
-  'Bags',
-  'Books',
-  'Sports Equipment',
-  'Other'
+  'electronics',
+  'clothing',
+  'jewelry',
+  'documents',
+  'keys',
+  'bags',
+  'books',
+  'sportsEquipment',
+  'other'
 ];
 
 export default function AddItemScreen() {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
@@ -34,7 +36,7 @@ export default function AddItemScreen() {
 
     // Validate input
     if (!name || !description || !category || !location) {
-      setError('Name, description, category, and location are required');
+      setError(t('errors.requiredFields'));
       return;
     }
 
@@ -48,7 +50,7 @@ export default function AddItemScreen() {
       const newItem: ItemCreateDTO = {
         name: name.trim(),
         description: description.trim(),
-        category: category.trim(),
+        category: t(`items.categories.${category}`),
         location: location.trim(),
         date: currentDate,
         isLost,
@@ -67,9 +69,9 @@ export default function AddItemScreen() {
     } catch (err) {
       console.error('Error creating item:', err);
       if (err instanceof Error) {
-        setError(err.message || 'Failed to add item. Please try again.');
+        setError(err.message || t('errors.saveFailed'));
       } else {
-        setError('Failed to add item. Please try again.');
+        setError(t('errors.saveFailed'));
       }
     } finally {
       setIsLoading(false);
@@ -80,14 +82,16 @@ export default function AddItemScreen() {
     <View style={styles.container}>
       <StatusBar style="dark" />
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>{isLost ? 'Report Lost Item' : 'Report Found Item'}</Text>
+        <Text style={styles.title}>
+          {isLost ? t('items.reportLost') : t('items.reportFound')}
+        </Text>
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>Item Status:</Text>
+          <Text style={styles.switchLabel}>{t('items.itemStatus')}:</Text>
           <View style={styles.statusToggle}>
-            <Text style={{ color: isLost ? '#4a90e2' : '#666' }}>Lost</Text>
+            <Text style={{ color: isLost ? '#4a90e2' : '#666' }}>{t('items.lost')}</Text>
             <Switch
               value={!isLost}
               onValueChange={(value) => setIsLost(!value)}
@@ -95,25 +99,25 @@ export default function AddItemScreen() {
               thumbColor="#fff"
               ios_backgroundColor="#4a90e2"
             />
-            <Text style={{ color: !isLost ? '#5cb85c' : '#666' }}>Found</Text>
+            <Text style={{ color: !isLost ? '#5cb85c' : '#666' }}>{t('items.found')}</Text>
           </View>
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Item Name</Text>
+          <Text style={styles.label}>{t('items.itemName')}</Text>
           <TextInput
             style={styles.input}
-            placeholder="What is the item?"
+            placeholder={t('items.whatIsItem')}
             value={name}
             onChangeText={setName}
           />
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Description</Text>
+          <Text style={styles.label}>{t('items.description')}</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
-            placeholder="Describe the item (color, size, distinctive features)"
+            placeholder={t('items.describeItem')}
             value={description}
             onChangeText={setDescription}
             multiline
@@ -123,7 +127,7 @@ export default function AddItemScreen() {
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Category</Text>
+          <Text style={styles.label}>{t('items.category')}</Text>
           <View style={styles.pickerContainer}>
             <Picker
               selectedValue={category}
@@ -131,27 +135,31 @@ export default function AddItemScreen() {
               style={styles.picker}
             >
               {CATEGORIES.map((cat) => (
-                <Picker.Item key={cat} label={cat} value={cat} />
+                <Picker.Item 
+                  key={cat} 
+                  label={t(`items.categories.${cat}`)} 
+                  value={cat}
+                />
               ))}
             </Picker>
           </View>
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Location</Text>
+          <Text style={styles.label}>{t('items.location')}</Text>
           <TextInput
             style={styles.input}
-            placeholder="Where was it lost/found?"
+            placeholder={t('items.whereItem')}
             value={location}
             onChangeText={setLocation}
           />
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Image URL (Optional)</Text>
+          <Text style={styles.label}>{t('items.imageUrl')}</Text>
           <TextInput
             style={styles.input}
-            placeholder="URL to an image of the item"
+            placeholder={t('items.imageUrlHint')}
             value={imageUrl}
             onChangeText={setImageUrl}
             autoCapitalize="none"
@@ -166,7 +174,7 @@ export default function AddItemScreen() {
           {isLoading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Submit</Text>
+            <Text style={styles.buttonText}>{t('items.submit')}</Text>
           )}
         </TouchableOpacity>
       </ScrollView>

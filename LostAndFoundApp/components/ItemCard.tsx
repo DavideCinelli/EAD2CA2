@@ -3,6 +3,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 interface ItemCardProps {
   item: ItemResponseDTO;
@@ -10,6 +11,8 @@ interface ItemCardProps {
 }
 
 export function ItemCard({ item, onRefresh }: ItemCardProps) {
+  const { t } = useTranslation();
+
   return (
     <Link href={`/items/${item.id}`} asChild>
       <TouchableOpacity style={styles.card} onPress={() => {}}>
@@ -66,7 +69,7 @@ export function ItemCard({ item, onRefresh }: ItemCardProps) {
                     ? '#d32f2f' 
                     : '#2e7d32' }
               ]}>
-                {item.isSolved ? 'Solved' : item.isLost ? 'Lost' : 'Found'}
+                {item.isSolved ? t('items.solved') : item.isLost ? t('items.lost') : t('items.found')}
               </Text>
             </View>
           </View>

@@ -15,16 +15,25 @@ export default function ItemsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('lost');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadItems();
-  }, []);
+  }, [activeFilter]);
 
   const loadItems = async () => {
     try {
       setIsLoading(true);
-      const allItems = await itemsApi.getAll();
-      setItems(allItems);
+      console.log('Loading items with filter:', activeFilter);
+      const fetchedItems = await itemsApi.getAll(activeFilter);
+      console.log('Fetched items:', {
+        total: fetchedItems.length,
+        solved: fetchedItems.filter(i => i.isSolved).length,
+        unsolved: fetchedItems.filter(i => !i.isSolved).length,
+        lost: fetchedItems.filter(i => i.isLost).length,
+        found: fetchedItems.filter(i => !i.isLost).length
+      });
+      setItems(fetchedItems);
     } catch (err) {
       console.error('Error loading items:', err);
       setError('Failed to load items');
@@ -33,7 +42,13 @@ export default function ItemsScreen() {
     }
   };
 
-  if (isLoading) {
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadItems();
+    setRefreshing(false);
+  };
+
+  if (isLoading && !refreshing) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#4a90e2" />
@@ -48,20 +63,6 @@ export default function ItemsScreen() {
       </View>
     );
   }
-
-  // Filter items based on the active filter
-  const filteredItems = items.filter(item => {
-    switch (activeFilter) {
-      case 'lost':
-        return item.isLost && !item.isSolved;
-      case 'found':
-        return !item.isLost && !item.isSolved;
-      case 'solved':
-        return item.isSolved;
-      default:
-        return true;
-    }
-  });
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
@@ -125,7 +126,7 @@ export default function ItemsScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={filteredItems}
+        data={items}
         ListHeaderComponent={renderHeader}
         renderItem={({ item }) => (
           <ItemCard item={item} onRefresh={loadItems} />
@@ -133,8 +134,8 @@ export default function ItemsScreen() {
         keyExtractor={item => item.id.toString()}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        refreshing={isLoading}
-        onRefresh={loadItems}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
         ListEmptyComponent={
           <View style={styles.centerContainer}>
             <Text style={styles.emptyText}>

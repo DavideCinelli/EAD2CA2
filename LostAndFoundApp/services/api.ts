@@ -69,30 +69,31 @@ export const getAuthHeader = async () => {
 // Items API
 export const itemsApi = {
   // Get all items
-  async getAll(): Promise<ItemResponseDTO[]> {
+  async getAll(filter?: string): Promise<ItemResponseDTO[]> {
     try {
-      console.log('Fetching items from:', API_ENDPOINTS.ITEMS);
+      console.log('Getting items with filter:', filter);
       
-      // Test network connectivity first
-      try {
-        console.log('Testing network connectivity...');
-        const testResponse = await fetch(API_ENDPOINTS.ITEMS, { 
-          method: 'GET',
-          headers: API_DEFAULT_HEADERS,
-          cache: 'no-cache'
-        });
-        console.log('Network connectivity test:', testResponse.ok ? 'Success' : 'Failed');
-      } catch (networkErr) {
-        console.error('Network connectivity test failed:', networkErr);
+      // Validate and normalize filter
+      let normalizedFilter: string | undefined;
+      if (filter) {
+        const validFilters = ['lost', 'found', 'solved', 'all'];
+        const lowercaseFilter = filter.toLowerCase();
+        if (!validFilters.includes(lowercaseFilter)) {
+          console.error('Invalid filter value:', filter);
+          throw new Error(`Invalid filter value: ${filter}`);
+        }
+        normalizedFilter = lowercaseFilter;
       }
       
-      // Add timeout to the fetch request
+      // Construct URL with normalized filter
+      const url = `${API_ENDPOINTS.ITEMS}${normalizedFilter ? `?filter=${normalizedFilter}` : ''}`;
+      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       
       try {
         console.log('Sending request to API with headers:', JSON.stringify(API_DEFAULT_HEADERS));
-        const response = await fetch(API_ENDPOINTS.ITEMS, {
+        const response = await fetch(url, {
           headers: API_DEFAULT_HEADERS,
           signal: controller.signal,
           cache: 'no-cache' // Disable caching to ensure fresh data
@@ -101,62 +102,49 @@ export const itemsApi = {
         clearTimeout(timeoutId);
         
         console.log('Items response status:', response.status, response.statusText);
-        console.log('Response headers:', JSON.stringify(Object.fromEntries([...response.headers])));
         
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Error response body:', errorText);
-          
-          // Return mock data for 500 errors to allow development to continue
-          if (response.status === 500) {
-            console.log('Falling back to mock data due to server error');
-            return MOCK_ITEMS;
-          }
-          
           throw new Error(`Failed to fetch items: ${response.status} ${response.statusText}`);
         }
         
-        const responseText = await response.text();
-        console.log('Response text preview:', responseText.substring(0, 100) + '...');
+        const items = await response.json();
         
-        try {
-          const data = JSON.parse(responseText);
-          console.log('Successfully parsed JSON data, count:', Array.isArray(data) ? data.length : 'Not an array');
-          
-          // If API returns null or not an array, return empty array
-          if (!data || !Array.isArray(data)) {
-            console.warn('API returned non-array data:', typeof data);
-            return MOCK_ITEMS; // Use mock data as fallback
+        // Verify items match the filter criteria
+        const verifiedItems = items.filter((item: ItemResponseDTO) => {
+          if (!normalizedFilter || normalizedFilter === 'all') {
+            // By default, show unsolved items
+            return !item.isSolved;
           }
-          
-          return data;
-        } catch (jsonError) {
-          console.error('JSON parse error:', jsonError);
-          console.error('Response was not valid JSON:', responseText.substring(0, 200));
-          return MOCK_ITEMS; // Use mock data as fallback
-        }
-      } catch (fetchError) {
+          switch (normalizedFilter) {
+            case 'lost':
+              return item.isLost && !item.isSolved;
+            case 'found':
+              return !item.isLost && !item.isSolved;
+            case 'solved':
+              return item.isSolved;
+            default:
+              return !item.isSolved;
+          }
+        });
+        
+        console.log('Fetched and verified items:', {
+          total: verifiedItems.length,
+          solved: verifiedItems.filter((i: ItemResponseDTO) => i.isSolved).length,
+          unsolved: verifiedItems.filter((i: ItemResponseDTO) => !i.isSolved).length,
+          lost: verifiedItems.filter((i: ItemResponseDTO) => i.isLost && !i.isSolved).length,
+          found: verifiedItems.filter((i: ItemResponseDTO) => !i.isLost && !i.isSolved).length
+        });
+        
+        return verifiedItems;
+      } catch (error) {
         clearTimeout(timeoutId);
-        console.error('Fetch error details:', fetchError);
-        if (fetchError.name === 'AbortError') {
-          console.error('Request timed out');
-          console.log('Falling back to mock data due to timeout');
-          return MOCK_ITEMS; // Use mock data as fallback for timeouts
-        }
-        throw fetchError;
+        throw error;
       }
     } catch (error) {
       console.error('Error fetching items:', error);
-      // Return mock data instead of empty array to allow testing
-      if (error instanceof TypeError && error.message.includes('Network request failed')) {
-        console.log('Network error, returning mock data');
-        return MOCK_ITEMS;
-      }
-      if (error instanceof Error && error.message.includes('500')) {
-        console.log('Server error (500), returning mock data');
-        return MOCK_ITEMS;
-      }
-      return MOCK_ITEMS; // Use mock data for all errors
+      throw error;
     }
   },
 
@@ -228,15 +216,21 @@ export const itemsApi = {
   // Update item
   async update(id: number, item: ItemUpdateDTO): Promise<ItemResponseDTO> {
     try {
-      const authHeader = await getAuthHeader();
-      const headers: Record<string, string> = {
+      // Get the auth token
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        console.error('No auth token found for update request');
+        throw new Error('Authentication required');
+      }
+
+      const headers = {
         ...API_DEFAULT_HEADERS,
-        ...(authHeader as Record<string, string>)
+        'Authorization': `Bearer ${token}`
       };
 
       console.log('Making PUT request to:', API_ENDPOINTS.ITEM_DETAIL(id.toString()));
-      console.log('Request headers:', headers);
-      console.log('Request body:', JSON.stringify(item, null, 2));
+      console.log('With headers:', { ...headers, Authorization: 'Bearer [TOKEN]' });
+      console.log('And body:', JSON.stringify(item, null, 2));
 
       const response = await fetch(API_ENDPOINTS.ITEM_DETAIL(id.toString()), {
         method: 'PUT',
@@ -245,17 +239,57 @@ export const itemsApi = {
       });
 
       console.log('Response status:', response.status);
-      const responseText = await response.text();
-      console.log('Response body:', responseText);
 
-      if (!response.ok) {
-        console.error(`Failed to update item ${id}: ${response.status}`);
-        console.error('Error response:', responseText);
-        throw new Error(`Server error: ${responseText}`);
+      // Handle 204 No Content response - this means the update was successful
+      if (response.status === 204) {
+        console.log('Update successful (204 No Content)');
+        
+        // Retry fetching the updated item until we see the changes or hit max retries
+        const maxRetries = 5;
+        const retryDelay = 1000; // 1 second between retries
+        
+        for (let i = 0; i < maxRetries; i++) {
+          console.log(`Attempt ${i + 1} of ${maxRetries} to fetch updated item`);
+          
+          // Wait before fetching
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          
+          // Fetch the updated item
+          const updatedItem = await itemsApi.getById(id);
+          console.log('Fetched item state:', {
+            isSolved: updatedItem.isSolved,
+            isLost: updatedItem.isLost
+          });
+          
+          // Check if the update is reflected
+          if (item.isSolved !== undefined && updatedItem.isSolved === item.isSolved) {
+            console.log('Update confirmed in database');
+            return updatedItem;
+          }
+          
+          console.log('Update not yet reflected in database, retrying...');
+        }
+        
+        console.warn('Max retries reached, returning last fetched state');
+        return await itemsApi.getById(id);
       }
 
-      // Only parse as JSON if we have content
-      return responseText ? JSON.parse(responseText) : null;
+      const responseText = await response.text();
+      console.log('Response text:', responseText);
+
+      if (!response.ok) {
+        console.error('Server error response:', responseText);
+        throw new Error(`Server error: ${response.status} - ${responseText}`);
+      }
+
+      try {
+        const parsedResponse = JSON.parse(responseText);
+        console.log('Parsed response:', parsedResponse);
+        return parsedResponse;
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        throw new Error('Invalid response format from server');
+      }
     } catch (error) {
       console.error('Error in update:', error);
       throw error;
@@ -287,6 +321,80 @@ export const itemsApi = {
       throw error;
     }
   },
+
+  // Update all item states
+  async updateAllStates(): Promise<void> {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        console.error('No auth token found for update request');
+        throw new Error('Authentication required');
+      }
+
+      const headers = {
+        ...API_DEFAULT_HEADERS,
+        'Authorization': `Bearer ${token}`
+      };
+
+      console.log('Making POST request to update all item states');
+      
+      const response = await fetch(`${API_ENDPOINTS.ITEMS}/UpdateAllStates`, {
+        method: 'POST',
+        headers
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server error response:', errorText);
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+
+      console.log('Successfully updated all item states');
+    } catch (error) {
+      console.error('Error updating item states:', error);
+      throw error;
+    }
+  },
+
+  // Mark item as solved
+  async markAsSolved(id: number): Promise<ItemResponseDTO> {
+    try {
+      // Get the auth token
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        console.error('No auth token found for mark as solved request');
+        throw new Error('Authentication required');
+      }
+
+      const headers = {
+        ...API_DEFAULT_HEADERS,
+        'Authorization': `Bearer ${token}`
+      };
+
+      console.log('Making POST request to mark item as solved:', API_ENDPOINTS.ITEM_DETAIL(id.toString()) + '/MarkAsSolved');
+      console.log('With headers:', { ...headers, Authorization: 'Bearer [TOKEN]' });
+
+      const response = await fetch(API_ENDPOINTS.ITEM_DETAIL(id.toString()) + '/MarkAsSolved', {
+        method: 'POST',
+        headers
+      });
+
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server error response:', errorText);
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+
+      const updatedItem = await response.json();
+      console.log('Item marked as solved:', updatedItem);
+      return updatedItem;
+    } catch (error) {
+      console.error('Error marking item as solved:', error);
+      throw error;
+    }
+  }
 };
 
 // Users API

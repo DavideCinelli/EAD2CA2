@@ -32,6 +32,24 @@ namespace LostAndFoundAPI.Data
                 .WithMany(u => u.Items)
                 .HasForeignKey(i => i.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Create composite index for IsSolved and IsLost
+            modelBuilder.Entity<Item>()
+                .HasIndex(i => new { i.IsSolved, i.IsLost })
+                .HasDatabaseName("IX_Items_IsSolved_IsLost");
+
+            modelBuilder.Entity<Item>(entity =>
+            {
+                // Configure boolean properties to never be value generated
+                entity.Property(e => e.IsLost)
+                    .ValueGeneratedNever();
+
+                entity.Property(e => e.IsSolved)
+                    .ValueGeneratedNever();
+
+                // Configure trigger
+                entity.ToTable(tb => tb.HasTrigger("trg----aid"));
+            });
         }
     }
 } 

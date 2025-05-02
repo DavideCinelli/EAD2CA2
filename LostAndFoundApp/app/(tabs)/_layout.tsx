@@ -1,9 +1,11 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { router, Tabs } from 'expo-router';
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useThemeColor } from '@/hooks/useThemeColor';
 
 /**
  * Helper component for tab bar icons
@@ -18,6 +20,8 @@ function TabBarIcon(props: {
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useTranslation();
+  const backgroundColor = useThemeColor({}, 'background');
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -34,17 +38,11 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#4a90e2',
+        tabBarActiveTintColor: colorScheme === 'dark' ? '#fff' : '#000',
         tabBarInactiveTintColor: '#666',
-        tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopWidth: 1,
-          borderTopColor: '#e0e0e0',
-        },
-        headerStyle: {
-          backgroundColor: '#fff',
-        },
-        headerTintColor: '#333',
+        tabBarStyle: { backgroundColor },
+        headerStyle: { backgroundColor },
+        headerTintColor: colorScheme === 'dark' ? '#fff' : '#000',
         headerTitleStyle: {
           fontWeight: 'bold',
         },
@@ -53,28 +51,32 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Items',
-          tabBarIcon: ({ color }) => <TabBarIcon name="list" color={color} />,
+          title: t('common.home'),
+          tabBarLabel: t('common.home'),
+          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Explore',
+          title: t('common.explore'),
+          tabBarLabel: t('common.explore'),
           tabBarIcon: ({ color }) => <TabBarIcon name="search" color={color} />,
         }}
       />
       <Tabs.Screen
         name="add-item"
         options={{
-          title: 'Add Item',
-          tabBarIcon: ({ color }) => <TabBarIcon name="plus-circle" color={color} />,
+          title: t('common.addItem'),
+          tabBarLabel: t('common.addItem'),
+          tabBarIcon: ({ color }) => <TabBarIcon name="plus-square" color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('common.profile'),
+          tabBarLabel: t('common.profile'),
           tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
         }}
       />
